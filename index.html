@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Food Scanner</title>
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/@picocss/pico@1.5.10/css/pico.min.css"
+    />
+    <style>
+      #video {
+        width: 100%;
+        max-height: 300px;
+        border-radius: var(--pico-border-radius);
+        display: block;
+        margin: 1rem 0;
+        background: black;
+      }
+      #history {
+        overflow-x: auto;
+        white-space: nowrap;
+      }
+      .history-card {
+        display: inline-block;
+        border: 1px solid var(--pico-muted-border-color);
+        padding: 1rem;
+        margin: 0.5rem;
+        min-width: 250px;
+        vertical-align: top;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="container">
+      <h1>Food Scanner</h1>
+      <button id="startScanner">Scan Barcode</button>
+      <div id="scannerContainer"></div>
+      <article id="result" hidden>
+        <h2 id="productName"></h2>
+        <ul>
+          <li>Energy: <span id="energy"></span> kcal</li>
+          <li>Fat: <span id="fat"></span> g</li>
+          <li>Fiber: <span id="fiber"></span> g</li>
+          <li>Proteins: <span id="proteins"></span> g</li>
+          <li>Sugars: <span id="sugars"></span> g</li>
+        </ul>
+      </article>
+
+      <h2>History</h2>
+      <div id="history"></div>
+    </main>
+
+    <script src="https://unpkg.com/@ericblade/quagga2@1.2.6/dist/quagga.min.js"></script>
+    <script>
+      const historyKey = "productHistory";
+      const maxHistory = 100;
+
+      const startScannerBtn = document.getElementById("startScanner");
+      const resultEl = document.getElementById("result");
+      const nameEl = document.getElementById("productName");
+      const energyEl = document.getElementById("energy");
+      const fatEl = document.getElementById("fat");
+      const fiberEl = document.getElementById("fiber");
+      const proteinsEl = document.getElementById("proteins");
+      const sugarsEl = document.getElementById("sugars");
+      const historyEl = document.getElementById("history");
+
+      function saveToHistory(item) {
+        let history = JSON.parse(localStorage.getItem(historyKey)) || [];
+        history.unshift(item);
+        history = history.slice(0, maxHistory);
+        localStorage.setItem(historyKey, JSON.stringify(history));
+        renderHistory();
+      }
+
+      function renderHistory() {
+        let history = JSON.parse(localStorage.getItem(historyKey)) || [];
+        historyEl.innerHTML = "";
+        history.forEach((item) => {
+          const card = document.createElement("div");
+          card.className = "history-card";
+          card.innerHTML = `
+          <strong>${item.name}</strong><br>
+          Barcode: ${item.code}<br>
+          Energy: ${item.energy} kcal<br>
+          Fat: ${item.fat} g<br>
+          Fiber: ${item.fiber} g<br>
+          Proteins: ${item.proteins} g<br>
+          Sugars: ${item.sugars} g
+        `;
+          historyEl.appendChild(card);
+        });
+      }
+
+      function displayProduct(data, code) {
+        const product = data.product;
+        nameEl.textContent = product.product_name || "Unknown Product";
+        energyEl.textContent = product.nutriments["energy-kcal_100g"] || "N/A";
+        fatEl.textContent = product.nutriments["fat_100g"] || "N/A";
+        fiberEl.textContent = product.nutriments["fiber_100g"] || "N/A";
+        proteinsEl.textContent = product.nutriments["proteins_100g"] || "N/A";
+        sugarsEl.textContent = product.nutriments["sugars_100g"] || "N/A";
+        resultEl.hidden = false;
+
+        saveToHistory({
+          code,
+          name: product.product_name || "Unknown",
+          energy: product.nutriments["energy-kcal_100g"] || "N/A",
+          fat: product.nutriments["fat_100g"] || "N/A",
+          fiber: product.nutriments["fiber_100g"] || "N/A",
+          proteins: product.nutriments["proteins_100g"] || "N/A",
+          sugars: product.nutriments["sugars_100g"] || "N/A",
+        });
+      }
+
+      async function fetchProduct(code) {
+        const res = await fetch(
+          `https://world.openfoodfacts.org/api/v2/product/${code}.json`
+        );
+        const json = await res.json();
+        if (json.status === 1) displayProduct(json, code);
+        else alert("Product not found");
+      }
+
+      function startScanner() {
+        Quagga.init(
+          {
+            inputStream: {
+              name: "Live",
+              type: "LiveStream",
+              target: document.querySelector("#scannerContainer"),
+              constraints: {
+                facingMode: "environment",
+              },
+            },
+            decoder: {
+              readers: ["ean_reader"],
+            },
+          },
+          (err) => {
+            if (err) {
+              console.error(err);
+              return;
+            }
+            Quagga.start();
+          }
+        );
+        Quagga.onProcessed((result) => {
+          console.log("Processing result:", result);
+        });
+        Quagga.onDetected((data) => {
+          const code = data.codeResult.code;
+          Quagga.stop();
+
+          fetchProduct(code);
+        });
+      }
+
+      startScannerBtn.addEventListener("click", () => {
+        startScanner();
+      });
+
+      renderHistory();
+    </script>
+  </body>
+</html>
