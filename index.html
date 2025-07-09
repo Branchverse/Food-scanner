@@ -143,6 +143,7 @@
               console.error(err);
               return;
             }
+            document.querySelector("#scannerContainer").hidden = false;
             Quagga.start();
           }
         );
@@ -152,7 +153,7 @@
         Quagga.onDetected((data) => {
           const code = data.codeResult.code;
           Quagga.stop();
-
+          document.querySelector("#scannerContainer").hidden = true;
           fetchProduct(code);
         });
       }
